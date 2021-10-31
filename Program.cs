@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Threading;
+using Npgsql;
 
 namespace hamburger_exercicio
 {
@@ -11,13 +12,19 @@ namespace hamburger_exercicio
         private static List<Ingrediente> ingredientes = new List<Ingrediente>();
         private static List<Pedido> pedidos = new List<Pedido>();
         private static List<Hamburger> hamburgeres = new List<Hamburger>();
+        private static List<Cliente> clientes = new List<Cliente>();
         static void Main(string[] args)
         {
-            // carregarIngredientesDoDiscoEmCsv();
-            // carregarHamburgeresDoDiscoEmCsv();
+            //carregarClientesDoDiscoEmCsv();
+            carregarClientesDoPostgreSql();
+            carregarIngredientesDoDiscoEmCsv();
+            carregarHamburgeresDoDiscoEmCsv();
+            carregarPedidosDoDiscoEmCsv();
 
-            carregarIngredientesDoDiscoEmJson();
-            carregarhamburgeresDoDiscoEmJson();
+            // carregarClientesDoDiscoEmJson();
+            // carregarIngredientesDoDiscoEmJson();
+            // carregarHamburgeresDoDiscoEmJson();
+            // carregarPedidosDoDiscoEmJson();
 
             while(true)
             {
@@ -29,6 +36,7 @@ namespace hamburger_exercicio
                 Console.WriteLine("4 - Listar pedidos");
                 Console.WriteLine("5 - Listar ingredientes");
                 Console.WriteLine("6 - Listar Hamburgeres");
+                Console.WriteLine("7 - Listar Clientes");
                 Console.WriteLine("0 - Sair");
 
                 int opcao = Convert.ToInt16(Console.ReadLine());
@@ -52,6 +60,9 @@ namespace hamburger_exercicio
                         break;
                     case 6:
                         listarHamburgeres();
+                        break;
+                    case 7:
+                        listarClientes();
                         break;
                     case 0:
                         return;
@@ -86,10 +97,43 @@ namespace hamburger_exercicio
             }
         }
 
-        private static void carregarhamburgeresDoDiscoEmJson()
+        private static void carregarPedidosDoDiscoEmCsv()
+        {
+            string readText = File.ReadAllText("pedidos.csv");
+            var linhas = readText.Split('\n');
+            foreach(var linha in linhas)
+            {
+                var colunas = linha.Split(';');
+                if(colunas[0] == "" || colunas[0].ToLower() == "codigo") continue;
+
+                var hamburgeresDoPedido = new List<Hamburger>();
+                var codigosHamburgeres = colunas[1].Split(',');
+                foreach(var cod in codigosHamburgeres)
+                {
+                    var codQtd = cod.Split('|');
+                    var ham = hamburgeres.Find(ham => ham.Codigo == Convert.ToInt16(codQtd[0]));
+                    ham.Quantidade = Convert.ToInt16(codQtd[1]);
+                    hamburgeresDoPedido.Add(ham);
+                }
+
+                pedidos.Add(new Pedido{
+                    Codigo = Convert.ToInt16(colunas[0]), 
+                    Itens = hamburgeresDoPedido,
+                    Cliente = clientes.Find(c => c.Codigo == Convert.ToInt16(colunas[2])),
+                });
+            }
+        }
+
+        private static void carregarHamburgeresDoDiscoEmJson()
         {
             string readText = File.ReadAllText("hamburgeres.json");
             hamburgeres = JsonSerializer.Deserialize<List<Hamburger>>(readText);
+        }
+
+        private static void carregarPedidosDoDiscoEmJson()
+        {
+            string readText = File.ReadAllText("pedidos.json");
+            pedidos = JsonSerializer.Deserialize<List<Pedido>>(readText);
         }
 
         private static void carregarIngredientesDoDiscoEmCsv()
@@ -107,6 +151,51 @@ namespace hamburger_exercicio
             }
         }
 
+        private static void carregarClientesDoDiscoEmCsv()
+        {
+            string readText = File.ReadAllText("clientes.csv");
+            var linhas = readText.Split('\n');
+            foreach(var linha in linhas)
+            {
+                var colunas = linha.Split(';');
+                if(colunas[0] == "" || colunas[0].ToLower() == "codigo") continue;
+                clientes.Add(new Cliente{
+                    Codigo = Convert.ToInt16(colunas[0]), 
+                    Nome = colunas[1],
+                    Endereco = colunas[2],
+                    Telefone = colunas[3]
+                });
+            }
+        }
+
+        private static void carregarClientesDoPostgreSql()
+        {
+            string connString ="Server=localhost;Username=danilo;Database=pedido_hamburger;Port=5432;Password=;SSLMode=Prefer";
+            using (var conn = new NpgsqlConnection(connString))
+            {
+                conn.Open();
+                using (var command = new NpgsqlCommand("select * from clientes", conn))
+                {
+                    var dr = command.ExecuteReader();
+                    while(dr.Read())
+                    {
+                        clientes.Add(new Cliente{
+                            Codigo = Convert.ToInt16(dr["codigo"]), 
+                            Nome = dr["nome"].ToString(),
+                            Endereco = dr["endereco"].ToString(),
+                            Telefone = dr["telefone"].ToString()
+                        });
+                    }
+                }
+            }
+        }
+        
+        private static void carregarClientesDoDiscoEmJson()
+        {
+            string readText = File.ReadAllText("clientes.json");
+            clientes = JsonSerializer.Deserialize<List<Cliente>>(readText);
+        }
+
         private static void carregarIngredientesDoDiscoEmJson()
         {
             string readText = File.ReadAllText("ingredientes.json");
@@ -122,6 +211,21 @@ namespace hamburger_exercicio
             foreach(var ingrediente in ingredientes)
             {
                 Console.WriteLine($"{ingrediente.Codigo} - {ingrediente.Nome}");
+                Console.WriteLine("----------------------------------");
+            }
+
+            Thread.Sleep(10000);
+        }
+        
+        private static void listarClientes()
+        {
+            Console.Clear();
+
+            Console.WriteLine("======== Lista de clientes ========");
+           
+            foreach(var cliente in clientes)
+            {
+                Console.WriteLine($"{cliente.Codigo} - {cliente.Nome} - {cliente.Endereco} - {cliente.Telefone}");
                 Console.WriteLine("----------------------------------");
             }
 
@@ -190,13 +294,30 @@ namespace hamburger_exercicio
             Console.WriteLine("Digite o nome do cliente");
             pedido.Cliente.Nome = Console.ReadLine();
 
-            Console.WriteLine("Digite o endereço do cliente");
-            pedido.Cliente.Endereco = Console.ReadLine();
+            var cli = clientes.Find(c => c.Nome.ToLower() == pedido.Cliente.Nome.ToLower());
+            if(cli != null)
+                pedido.Cliente = cli;
+            else
+            {
+                Console.WriteLine("Digite o endereço do cliente");
+                pedido.Cliente.Endereco = Console.ReadLine();
+
+                Console.WriteLine("Digite o telefone do cliente");
+                pedido.Cliente.Telefone = Console.ReadLine();
+
+                pedido.Cliente.Codigo = clientes.Count + 1;
+
+                clientes.Add(pedido.Cliente);
+                salvarClientesCsv(clientes);
+                //salvarClientesJson(clientes);
+            }
 
             selectionaHamburgeres(pedido);
 
             pedidos.Add(pedido);
 
+            // salvarPedidosJson(pedidos);
+            salvarPedidosCsv(pedidos);
 
             Console.WriteLine("Pedido cadastrado com sucesso");
             Thread.Sleep(1000);
@@ -254,8 +375,8 @@ namespace hamburger_exercicio
 
             hamburgeres.Add(hamburger);
 
-            // salvarHamburgeresCsv(hamburgeres);
-            salvarHamburgeresJson(hamburgeres);
+            salvarHamburgeresCsv(hamburgeres);
+            // salvarHamburgeresJson(hamburgeres);
 
             Console.WriteLine("Hamburger cadastrado com sucesso");
             Thread.Sleep(1000);
@@ -296,8 +417,8 @@ namespace hamburger_exercicio
             ingrediente.Codigo = ingredientes.Count + 1;
             ingredientes.Add(ingrediente);
 
-            // salvarIngredientesCsv(ingredientes);
-            salvarIngredientesJson(ingredientes);
+            salvarIngredientesCsv(ingredientes);
+            // salvarIngredientesJson(ingredientes);
 
             Console.WriteLine("Ingrediente cadastrado com sucesso");
             Thread.Sleep(1000);
@@ -319,6 +440,33 @@ namespace hamburger_exercicio
             File.WriteAllText("hamburgeres.csv", conteudoCsv);
         }
 
+        private static void salvarPedidosCsv(List<Pedido> pedidos)
+        {
+            string conteudoCsv = "Codigo;Itens;CodigoCliente\n";
+            foreach(var pedido in pedidos)
+            {
+                List<string> codigoQtdPedidos = new List<string>();
+                foreach(var ham in pedido.Itens)
+                {
+                    codigoQtdPedidos.Add($"{ham.Codigo}|{ham.Quantidade}");
+                }
+                conteudoCsv += $"{pedido.Codigo};{string.Join(",", codigoQtdPedidos.ToArray())};{pedido.Cliente.Codigo}\n";
+            }
+            
+            File.WriteAllText("pedidos.csv", conteudoCsv);
+        }
+        
+        private static void salvarClientesCsv(List<Cliente> clientes)
+        {
+            string conteudoCsv = "Codigo;Nome;Endereco;Telefone\n";
+            foreach(var cliente in clientes)
+            {
+                conteudoCsv += $"{cliente.Codigo};{cliente.Nome};{cliente.Endereco};{cliente.Telefone}\n";
+            }
+            
+            File.WriteAllText("clientes.csv", conteudoCsv);
+        }
+        
         private static void salvarHamburgeresJson(List<Hamburger> hamburgeres)
         {
             File.WriteAllText("hamburgeres.json", JsonSerializer.Serialize(hamburgeres));
@@ -338,6 +486,16 @@ namespace hamburger_exercicio
         private static void salvarIngredientesJson(List<Ingrediente> ingredientes)
         {
             File.WriteAllText("ingredientes.json", JsonSerializer.Serialize(ingredientes));
+        }
+
+        private static void salvarClientesJson(List<Cliente> clientes)
+        {
+            File.WriteAllText("clientes.json", JsonSerializer.Serialize(clientes));
+        }
+
+        private static void salvarPedidosJson(List<Pedido> pedidos)
+        {
+            File.WriteAllText("pedidos.json", JsonSerializer.Serialize(pedidos));
         }
     }
 }
